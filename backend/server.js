@@ -32,7 +32,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ✅ since your folder is "frontend"
-const clientBuildPath = path.join(__dirname, "frontend", "build");
+const clientBuildPath = path.join(__dirname, "../frontend/build");
 
 // if build folder exists, serve it
 if (fs.existsSync(clientBuildPath)) {
