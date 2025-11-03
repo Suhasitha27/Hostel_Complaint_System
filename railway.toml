@@ -1,0 +1,6 @@
+# railway.toml
+[build]
+root = "backend"
+
+[start]
+cmd = "npm start"
