@@ -1,3 +1,4 @@
+// backend/server.js
 import express from "express";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
@@ -15,7 +16,10 @@ import User from "./models/User.js";
 dotenv.config();
 
 const app = express();
-app.use(cors());
+
+// Allow configuring CORS origin from environment (useful for security in prod)
+const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
+app.use(cors({ origin: CORS_ORIGIN }));
 app.use(express.json());
 
 // --------------------
@@ -25,39 +29,68 @@ app.use("/api/auth", authRoutes);
 app.use("/api/complaints", complaintRoutes);
 app.use("/api/notifications", notificationRoutes);
 
+// simple health check (useful for platform health probes)
+app.get("/health", (req, res) => res.json({ status: "ok" }));
+
 // --------------------
-// Serve Frontend Build
+// Serve Frontend Build (if present)
 // --------------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// ✅ since your folder is "frontend"
+// backend is in backend/, frontend is sibling: ../frontend/build
 const clientBuildPath = path.join(__dirname, "../frontend/build");
 
-// if build folder exists, serve it
 if (fs.existsSync(clientBuildPath)) {
   app.use(express.static(clientBuildPath));
+  // serve index.html for any non-API route so React Router works
   app.get("*", (req, res) => {
+    // keep API routes functioning
+    if (req.path.startsWith("/api/")) return res.status(404).json({ error: "Not found" });
     res.sendFile(path.join(clientBuildPath, "index.html"));
   });
 }
 
-const PORT = process.env.PORT || 5000;
+const PORT = Number(process.env.PORT || 5000);
 
 // --------------------
 // MongoDB Connection
 // --------------------
 if (!process.env.MONGO_URI) {
-  console.error("❌ MONGO_URI is not set. Add it to your .env file or hosting variables.");
+  console.error("❌ MONGO_URI is not set. Add it to your environment variables.");
   process.exit(1);
 }
 
+// optional: avoid strictQuery warnings in newer mongoose versions
+if (typeof mongoose.set === "function") mongoose.set("strictQuery", false);
+
+// Use recommended connection options (compatible with modern mongoose)
+const mongooseOptions = {
+  // these options are safe defaults; mongoose will ignore unknown ones
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+};
+
 mongoose
-  .connect(process.env.MONGO_URI)
+  .connect(process.env.MONGO_URI, mongooseOptions)
   .then(() => {
     console.log("✅ MongoDB Connected");
-    seedAdminStaff(); // seed default users
-    app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+    // seed default users (safe — checks for existence before creating)
+    seedAdminStaff().catch((e) => console.error("Seed error:", e));
+    const server = app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+
+    // graceful shutdown for platform signals
+    const shutdown = async () => {
+      console.log("Shutdown signal received. Closing server and MongoDB connection...");
+      server.close(() => {
+        mongoose.connection.close(false, () => {
+          console.log("MongoDB connection closed. Exiting process.");
+          process.exit(0);
+        });
+      });
+    };
+    process.on("SIGINT", shutdown);
+    process.on("SIGTERM", shutdown);
   })
   .catch((err) => {
     console.error("MongoDB connection error:", err);
@@ -108,3 +141,10 @@ async function seedAdminStaff() {
     console.error("Error seeding default users:", err);
   }
 }
+
+// --------------------
+// Basic error handler (returns JSON)
+app.use((err, req, res, next) => {
+  console.error("Unhandled error:", err);
+  res.status(500).json({ error: "Internal server error" });
+});
