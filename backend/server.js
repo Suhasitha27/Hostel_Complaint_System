@@ -1,4 +1,3 @@
-// backend/server.js
 import express from "express";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
@@ -7,6 +6,7 @@ import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
+import { Router } from "express";
 
 import authRoutes from "./routes/auth.js";
 import complaintRoutes from "./routes/complaints.js";
@@ -45,11 +45,12 @@ const clientBuildPath = path.join(__dirname, "../frontend/build");
 if (fs.existsSync(clientBuildPath)) {
   app.use(express.static(clientBuildPath));
 
-  // ✅ Express 5 compatible wildcard route (no crash)
-  app.get("*", (req, res) => {
-  res.sendFile(path.join(clientBuildPath, "index.html"));
-});
-
+  // ✅ Express 5–safe wildcard route
+  const router = Router();
+  router.use((req, res) => {
+    res.sendFile(path.join(clientBuildPath, "index.html"));
+  });
+  app.use(router);
 }
 
 const PORT = process.env.PORT || 5000;
