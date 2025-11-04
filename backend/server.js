@@ -17,7 +17,9 @@ dotenv.config();
 
 const app = express();
 
-// Allow configuring CORS origin from environment (useful for security in prod)
+// --------------------
+// Middleware
+// --------------------
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
 app.use(cors({ origin: CORS_ORIGIN }));
 app.use(express.json());
@@ -29,28 +31,27 @@ app.use("/api/auth", authRoutes);
 app.use("/api/complaints", complaintRoutes);
 app.use("/api/notifications", notificationRoutes);
 
-// simple health check (useful for platform health probes)
+// Simple health check
 app.get("/health", (req, res) => res.json({ status: "ok" }));
 
 // --------------------
-// Serve Frontend Build (if present)
+// Serve Frontend Build (for Render deployment)
 // --------------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// backend is in backend/, frontend is sibling: ../frontend/build
 const clientBuildPath = path.join(__dirname, "../frontend/build");
 
 if (fs.existsSync(clientBuildPath)) {
   app.use(express.static(clientBuildPath));
 
-  // ✅ Fix for Express 5 wildcard issue
-  app.get(/.*/, (req, res) => {
+  // ✅ Express 5 compatible wildcard route (no crash)
+  app.get("*", (req, res) => {
     res.sendFile(path.join(clientBuildPath, "index.html"));
   });
 }
 
-const PORT = Number(process.env.PORT || 5000);
+const PORT = process.env.PORT || 5000;
 
 // --------------------
 // MongoDB Connection
@@ -60,25 +61,16 @@ if (!process.env.MONGO_URI) {
   process.exit(1);
 }
 
-// optional: avoid strictQuery warnings in newer mongoose versions
 if (typeof mongoose.set === "function") mongoose.set("strictQuery", false);
 
-// Use recommended connection options (compatible with modern mongoose)
-const mongooseOptions = {
-  // these options are safe defaults; mongoose will ignore unknown ones
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-};
-
 mongoose
-  .connect(process.env.MONGO_URI, mongooseOptions)
+  .connect(process.env.MONGO_URI)
   .then(() => {
     console.log("✅ MongoDB Connected");
-    // seed default users (safe — checks for existence before creating)
     seedAdminStaff().catch((e) => console.error("Seed error:", e));
+
     const server = app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
 
-    // graceful shutdown for platform signals
     const shutdown = async () => {
       console.log("Shutdown signal received. Closing server and MongoDB connection...");
       server.close(() => {
@@ -142,7 +134,8 @@ async function seedAdminStaff() {
 }
 
 // --------------------
-// Basic error handler (returns JSON)
+// Basic Error Handler
+// --------------------
 app.use((err, req, res, next) => {
   console.error("Unhandled error:", err);
   res.status(500).json({ error: "Internal server error" });
