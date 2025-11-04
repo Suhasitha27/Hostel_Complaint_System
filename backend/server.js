@@ -44,7 +44,7 @@ const clientBuildPath = path.join(__dirname, "../frontend/build");
 if (fs.existsSync(clientBuildPath)) {
   app.use(express.static(clientBuildPath));
   // serve index.html for any non-API route so React Router works
-  app.get("*", (req, res) => {
+  app.get("/*", (req, res) => {
     // keep API routes functioning
     if (req.path.startsWith("/api/")) return res.status(404).json({ error: "Not found" });
     res.sendFile(path.join(clientBuildPath, "index.html"));
