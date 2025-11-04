@@ -46,9 +46,10 @@ if (fs.existsSync(clientBuildPath)) {
   app.use(express.static(clientBuildPath));
 
   // ✅ Express 5 compatible wildcard route (no crash)
-  app.get("/*", (req, res) => {
+  app.get("*", (req, res) => {
   res.sendFile(path.join(clientBuildPath, "index.html"));
 });
+
 }
 
 const PORT = process.env.PORT || 5000;
